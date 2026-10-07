@@ -112,6 +112,13 @@ pub struct Rasterizer {
     pub cell_h: u32,
     /// 字号（像素）
     pub font_size: f32,
+    /// 用**字符斜坡**画盲文单元，而不是画点阵。
+    ///
+    /// 参考实现（`tuikit.py` 的 `tile_from_lum()`）就是这么做的：亮度 → 字符。
+    /// 盲文 2×4 点阵能表达 0..8 级覆盖率，正好够喂一条 10 级字符斜坡。
+    /// 这样整幅画面读起来是**终端文本**，而不是细密点阵 —— 后者在 1760 宽下
+    /// 看起来就是「一堆噪点 / 模糊」。设 `WEM_DOTS=1` 可退回点阵。
+    pub glyph_ramp: bool,
 }
 
 impl Rasterizer {
@@ -154,6 +161,7 @@ impl Rasterizer {
             cell_h,
             // 字号取单元高度的 85%，给上下留一点呼吸空间
             font_size: cell_h as f32 * 0.85,
+            glyph_ramp: std::env::var("WEM_DOTS").is_err(),
         }
     }
 
@@ -220,7 +228,11 @@ impl Rasterizer {
         let cp = ch as u32;
         if (0x2800..=0x28FF).contains(&cp) {
             let bits = (cp - 0x2800) as u8;
-            self.draw_braille(img, x0, y0, bits, fg);
+            if self.glyph_ramp {
+                self.draw_ramp_cell(img, x0, y0, bits, fg);
+            } else {
+                self.draw_braille(img, x0, y0, bits, fg);
+            }
             return;
         }
         // 半块/方块族：直接用矩形填充，比字体更精确
@@ -262,12 +274,14 @@ impl Rasterizer {
             _ => {}
         }
 
+        self.glyph_in_cell(img, x0, y0, ch, fg);
+    }
+
+    /// 把一个字形画进单元：水平居中、基线垂直居中。缺字自动回退中日韩字体。
+    fn glyph_in_cell(&self, img: &mut RgbaImage, x0: u32, y0: u32, ch: char, fg: Rgba<u8>) {
         // 字形回退：主字体没有这个字形时换用中日韩字体。
         // `lookup_glyph_index` 返回 0 即缺字 —— DejaVu 遇到汉字就是这种情况。
-        let chosen = match &self.font {
-            Some(f) if f.lookup_glyph_index(ch) != 0 => self.font.as_ref(),
-            _ => self.fallback.as_ref().or(self.font.as_ref()),
-        };
+        let chosen = self.pick(ch);
         match chosen {
             Some(font) => {
                 let (metrics, bitmap) = font.rasterize(ch, self.font_size);
@@ -383,6 +397,26 @@ impl Rasterizer {
             }
         }
         w
+    }
+
+    /// 用「字符斜坡」画一个单元：覆盖率 → 字符，再用真字体画出来。
+    ///
+    /// 这是参考实现（`tuikit.py` 的 `tile_from_lum()`）的做法。整幅画面因此
+    /// 读起来是**终端文本**而不是细密点阵 —— 后者在 1760×992 下就是「噪点 / 模糊」。
+    pub fn draw_ramp_cell(&self, img: &mut RgbaImage, x0: u32, y0: u32, bits: u8, fg: Rgba<u8>) {
+        // 从空到满。前导空格保证「几乎没内容」的单元是干净的。
+        const RAMP: &[u8] = b" .:-=+*#%@";
+        if bits == 0 {
+            return;
+        }
+        // 0..=8 级覆盖率 → 0..=9 级斜坡
+        let cov = bits.count_ones() as usize;
+        let idx = ((cov * (RAMP.len() - 1) + 4) / 8).min(RAMP.len() - 1);
+        let ch = RAMP[idx] as char;
+        if ch == ' ' {
+            return;
+        }
+        self.glyph_in_cell(img, x0, y0, ch, fg);
     }
 
     /// 用几何方式画 Braille 点阵（2×4）。
