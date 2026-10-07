@@ -7,6 +7,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use image::RgbaImage;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 
@@ -64,7 +65,20 @@ impl FrameExporter {
 
     /// 写出第 `index` 帧。
     pub fn write(&mut self, index: u64, buf: &Buffer, area: Rect) -> Result<PathBuf> {
-        let img = self.raster.render(buf, area);
+        self.write_with(index, buf, area, |_, _| {})
+    }
+
+    /// 写出第 `index` 帧，并在编码前对位图做一次自定义处理。
+    ///
+    /// TUI 外壳（窗口框 / 真字歌词 / CRT 后期）走这里 ——
+    /// 它们必须作用在**像素**上，而不是字符格上：字符格是 8×16 像素，
+    /// 汉字塞进去会重叠糊掉，而按像素画才能拿到真字形。
+    pub fn write_with<F>(&mut self, index: u64, buf: &Buffer, area: Rect, f: F) -> Result<PathBuf>
+    where
+        F: FnOnce(&Rasterizer, &mut RgbaImage),
+    {
+        let mut img = self.raster.render(buf, area);
+        f(&self.raster, &mut img);
         let path = self.dir.join(Self::frame_name(index));
 
         // 显式指定编码参数：默认压缩级别跑满 CPU，

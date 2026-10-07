@@ -158,6 +158,8 @@ pub struct Config {
     pub export_frames: Option<PathBuf>,
     pub export_video: Option<PathBuf>,
     pub no_audio: bool,
+    /// 文字自检的时间点（秒）。见 [`Cli::dump_text`]。
+    pub dump_text: Option<String>,
     pub command: Option<Command>,
     pub log_file: PathBuf,
 }
@@ -205,6 +207,7 @@ impl Config {
             export_frames: cli.export_frames.clone(),
             export_video: cli.export_video.clone(),
             no_audio: cli.no_audio,
+            dump_text: cli.dump_text.clone(),
             command: cli.command.clone(),
             log_file,
         })

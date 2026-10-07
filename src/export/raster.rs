@@ -312,6 +312,79 @@ impl Rasterizer {
         }
     }
 
+    /// 选字体：主字体缺字时回退到中日韩字体。
+    pub fn pick(&self, ch: char) -> Option<&Font> {
+        match &self.font {
+            Some(f) if f.lookup_glyph_index(ch) != 0 => Some(f),
+            _ => self.fallback.as_ref().or(self.font.as_ref()),
+        }
+    }
+
+    /// 按**像素坐标**画真字形文字，字号任意。`y` 是基线，返回下一个字的左边缘。
+    ///
+    /// 这是参考实现（`MisakaZentai/world-execute-me-dsh-pv` 的 `tuikit.py`）的核心画法：
+    /// 文字用真字体光栅化，而不是塞进字符格。字符格是 8×16 像素，
+    /// 而汉字是方块字 —— 13 像素宽的汉字塞进 8 像素的格子，相邻两字重叠约 40%，
+    /// 整行必然糊成一团。按像素画就完全没有这个问题。
+    pub fn text(
+        &self,
+        img: &mut RgbaImage,
+        x: i32,
+        y: i32,
+        s: &str,
+        px: f32,
+        color: [u8; 3],
+        alpha: f32,
+    ) -> i32 {
+        let a = (alpha.clamp(0.0, 1.0) * 255.0).round() as u8;
+        if a == 0 || px <= 0.0 {
+            return x;
+        }
+        let fg = Rgba([color[0], color[1], color[2], 255]);
+        let mut cx = x;
+        for ch in s.chars() {
+            if ch.is_control() {
+                continue;
+            }
+            let Some(font) = self.pick(ch) else {
+                cx += (px * 0.6).round() as i32;
+                continue;
+            };
+            let (m, bitmap) = font.rasterize(ch, px);
+            if m.width > 0 && m.height > 0 {
+                let py0 = y - m.height as i32 - m.ymin;
+                for gy in 0..m.height {
+                    for gx in 0..m.width {
+                        let cov = bitmap[gy * m.width + gx];
+                        if cov == 0 {
+                            continue;
+                        }
+                        // 覆盖度 × 全局 alpha
+                        let aa = ((cov as u32 * a as u32) / 255) as u8;
+                        blend_pixel(img, cx + gx as i32, py0 + gy as i32, fg, aa);
+                    }
+                }
+            }
+            cx += m.advance_width.round() as i32;
+        }
+        cx
+    }
+
+    /// 量一段文字在 `px` 字号下的像素宽度（不画）。
+    pub fn measure_text(&self, s: &str, px: f32) -> i32 {
+        let mut w = 0i32;
+        for ch in s.chars() {
+            if ch.is_control() {
+                continue;
+            }
+            match self.pick(ch) {
+                Some(font) => w += font.metrics(ch, px).advance_width.round() as i32,
+                None => w += (px * 0.6).round() as i32,
+            }
+        }
+        w
+    }
+
     /// 用几何方式画 Braille 点阵（2×4）。
     pub fn draw_braille(&self, img: &mut RgbaImage, x0: u32, y0: u32, bits: u8, fg: Rgba<u8>) {
         if bits == 0 {

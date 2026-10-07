@@ -7,6 +7,7 @@
 
 pub mod frames;
 pub mod raster;
+pub mod tui;
 pub mod video;
 
 // 这些是导出子系统的公开 API 表面，主流程只用到其中一部分。

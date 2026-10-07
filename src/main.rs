@@ -55,7 +55,7 @@ use crate::input::Action;
 use crate::lyrics::words::WordTimeline;
 use crate::lyrics::Lyrics;
 use crate::render::color as col;
-use crate::render::layers::{LayerStack, LAYER_BG, LAYER_LYRICS, LAYER_PARTICLES, LAYER_SUBJECT};
+use crate::render::layers::{LayerStack, LAYER_LYRICS, LAYER_PARTICLES, LAYER_SUBJECT};
 use crate::render::particles::ParticleSystem;
 use crate::render::postfx::PostFxStack;
 use crate::render::scenes::{self, SceneCtx};
@@ -267,17 +267,13 @@ impl Engine {
             invert: cues.active(t, CueKind::Invert),
         };
 
-        // 清空所有图层（大气场必须画在 clear_all 之后，否则刚铺的底纹会被清掉）
         self.layers.clear_all();
 
-        // 0) 全屏流动大气场 → 背景层
-        //    必须画在主体之前、且单独占一层：主体层带 alpha，
-        //    底纹若跟着主体一起被压暗就白铺了。
-        //    这一层是「画面不再大片死黑」的硬保证 —— 它保证每个字符格至少有一个亮点。
-        {
-            let bg = self.layers.canvas_mut(LAYER_BG);
-            crate::render::atmosphere::render(bg, &ctx, 0.95);
-        }
+        // 这里**不**铺全屏底纹。
+        // 上一版铺了一层 20% 覆盖率的随机亮点场，结果是「亮点太多、杂乱」。
+        // 参考实现（MisakaZentai/world-execute-me-dsh-pv 的 `dot_field()`）的底纹是
+        // **16px 规则网格、亮度 0.1** —— 规则、极暗、几乎看不见。
+        // 底纹现在由导出外壳在像素层画（`export::tui::dot_field`）。
 
         // 1) 场景 → 主体层
         {
@@ -827,155 +823,6 @@ fn draw_lyric_band(f: &mut Frame, engine: &Engine, stats: &FrameStats, area: Rec
 pub const CHROME_TOP: u16 = 2;
 pub const CHROME_BOTTOM: u16 = 6;
 
-/// 外壳的两块点阵画布（顶栏 / 底栏）。
-///
-/// **为什么不用 ratatui 的 `Buffer` 写字**：`Buffer` 的一个字符格是 8×16 像素，
-/// 而中日文是方块字（宽高比 1:1）。把 13 像素宽的汉字塞进 8 像素宽的格子里，
-/// 相邻两字会重叠约 40%，整行糊成一团 —— 这正是「歌词看不懂」的根因。
-/// 点阵画布的一个点就是 4×4 像素的方块，汉字可以按真实比例光栅化，
-/// 而且和画面里的字符画共享同一套光栅化路径，风格统一。
-pub struct Chrome {
-    top: CharCanvas,
-    bottom: CharCanvas,
-}
-
-impl Chrome {
-    pub fn new(cols: u16, mode: RenderMode) -> Self {
-        Self {
-            top: CharCanvas::new(cols, CHROME_TOP, mode),
-            bottom: CharCanvas::new(cols, CHROME_BOTTOM, mode),
-        }
-    }
-
-    /// 把外壳叠加到已经画好画面的 `buf` 上。
-    pub fn draw(&mut self, buf: &mut Buffer, area: Rect, engine: &Engine, stats: &FrameStats, t: f64) {
-        if area.width < 40 || area.height < CHROME_TOP + CHROME_BOTTOM + 4 {
-            return;
-        }
-        self.top.clear();
-        draw_chrome_top(&mut self.top, stats, t);
-        self.top.to_buffer(
-            buf,
-            Rect::new(area.x, area.y, area.width, CHROME_TOP),
-        );
-
-        self.bottom.clear();
-        draw_chrome_bottom(&mut self.bottom, engine, stats);
-        self.bottom.to_buffer(
-            buf,
-            Rect::new(
-                area.x,
-                area.y + area.height - CHROME_BOTTOM,
-                area.width,
-                CHROME_BOTTOM,
-            ),
-        );
-    }
-}
-
-/// 顶栏：曲名 · 作者 · 章节 · 时间码。
-fn draw_chrome_top(c: &mut CharCanvas, stats: &FrameStats, t: f64) {
-    let [main, _dim, _accent] = stats.scene.palette();
-    let sw = c.sw as f32;
-    let sh = c.sh as f32;
-
-    c.fill_rect(0.0, 0.0, sw, sh, col::lerp(col::BLACK, main, 0.30), 1.0);
-    // 底边一条亮线，把顶栏和画面切开
-    c.fill_rect(0.0, sh - 1.0, sw, 1.0, col::lerp(main, col::WHITE, 0.35), 1.0);
-
-    let px = sh * 0.62;
-    let base = sh - 1.5;
-    let hot = col::lerp(main, col::WHITE, 0.62);
-    let title = format!(
-        " 春・夏・秋・冬 · Junia Brutus × 重音テト · {} ",
-        stats.scene.label()
-    );
-    let used = crate::render::text::draw(c, 2.0, base, &title, px, hot, 1.0);
-
-    let tc = format!("{:02}:{:04.1} / 04:49.9 ", (t / 60.0) as u32, t % 60.0);
-    let tw = crate::render::text::measure(&tc, px);
-    if used + tw + 4.0 < sw {
-        crate::render::text::draw(
-            c,
-            sw - tw - 2.0,
-            base,
-            &tc,
-            px,
-            col::lerp(col::BLACK, main, 0.95),
-            1.0,
-        );
-    }
-}
-
-/// 底栏：当前唱句（逐词卡拉OK）+ 下一句 + 进度条。
-fn draw_chrome_bottom(c: &mut CharCanvas, engine: &Engine, stats: &FrameStats) {
-    let [main, dim, accent] = stats.scene.palette();
-    let sw = c.sw as f32;
-    let sh = c.sh as f32;
-
-    c.fill_rect(0.0, 0.0, sw, sh, col::lerp(col::BLACK, main, 0.16), 1.0);
-    c.fill_rect(0.0, 0.0, sw, 1.0, col::lerp(main, col::WHITE, 0.25), 1.0);
-
-    // ── 当前唱句 ──────────────────────────────────────────────
-    if let Some(idx) = stats.lyric_line {
-        if let Some(synced) = engine.words.lines().iter().find(|l| l.index == idx) {
-            let px = sh * 0.40;
-            let base = sh * 0.48;
-            let total = crate::render::text::measure(&synced.text, px);
-            let mut x = ((sw - total) * 0.5).max(2.0);
-            for (wi, wd) in synced.words.iter().enumerate() {
-                if wd.byte_start > wd.byte_end || wd.byte_end > synced.text.len() {
-                    continue;
-                }
-                let slice = &synced.text[wd.byte_start..wd.byte_end];
-                let singing = wi == stats.lyric_word;
-                let sung = wi < stats.lyric_word;
-                if singing {
-                    // 正在唱：先铺一块强调色，字画成黑色 —— 卡拉OK 的走字块
-                    let w = crate::render::text::measure(slice, px);
-                    c.fill_rect(x - 1.5, base - px * 0.92, w + 3.0, px * 1.15, accent, 1.0);
-                    x = crate::render::text::draw(c, x, base, slice, px, col::BLACK, 1.0);
-                } else {
-                    let ink = if sung {
-                        col::WHITE
-                    } else {
-                        col::lerp(col::BLACK, col::GREY_WHITE, 0.62)
-                    };
-                    x = crate::render::text::draw(c, x, base, slice, px, ink, 1.0);
-                }
-                x += crate::render::text::measure(" ", px);
-            }
-        }
-    }
-
-    // ── 下一句预告 ────────────────────────────────────────────
-    let nxt = stats
-        .lyric_line
-        .and_then(|i| engine.words.lines().iter().find(|l| l.index == i + 1))
-        .map(|l| l.text.as_str())
-        .unwrap_or("");
-    if !nxt.is_empty() {
-        let px = sh * 0.21;
-        let w = crate::render::text::measure(nxt, px);
-        crate::render::text::draw(
-            c,
-            ((sw - w) * 0.5).max(2.0),
-            sh - 4.0,
-            nxt,
-            px,
-            col::lerp(col::BLACK, dim, 0.85),
-            1.0,
-        );
-    }
-
-    // ── 进度条 ────────────────────────────────────────────────
-    let p = stats.progress.clamp(0.0, 1.0);
-    let by = sh - 3.0;
-    c.fill_rect(0.0, by, sw, 3.0, col::lerp(col::BLACK, main, 0.40), 1.0);
-    c.fill_rect(0.0, by, sw * p, 3.0, accent, 1.0);
-    // 进度游标：一条比进度条高的亮线，让「现在到哪了」一眼可见
-    c.fill_rect((sw * p - 0.5).max(0.0), by - 1.0, 1.5, 4.0, col::WHITE, 1.0);
-}
 
 /// 底部状态栏。
 fn draw_status(
@@ -1147,7 +994,6 @@ fn export_all(
     let area = Rect::new(0, 0, cols, rows);
     let stage = Rect::new(0, CHROME_TOP, cols, stage_rows);
     let mut buf = ratatui::buffer::Buffer::empty(area);
-    let mut chrome = Chrome::new(cols, cfg.mode);
 
     // ── 文字自检 ──────────────────────────────────────────────────
     // 终端艺术本身就是字符，所以自检不需要任何图像模型：
@@ -1163,7 +1009,6 @@ fn export_all(
             }
             let stats = engine.render_frame(t, dt);
             engine.canvas.to_buffer(&mut buf, stage);
-            chrome.draw(&mut buf, area, &engine, &stats, t);
             let line = stats
                 .lyric_line
                 .and_then(|i| engine.words.lines().iter().find(|l| l.index == i))
@@ -1199,8 +1044,46 @@ fn export_all(
         }
         let stats = engine.render_frame(t, dt);
         engine.canvas.to_buffer(&mut buf, stage);
-        chrome.draw(&mut buf, area, &engine, &stats, t);
-        exporter.write(i, &buf, area)?;
+
+        // 外壳在**像素层**合成：窗口框、真字歌词、CRT 后期。
+        // 不再走字符格 —— 8×16 的格子里塞 13px 的汉字，相邻两字会重叠 40%。
+        let synced = stats
+            .lyric_line
+            .and_then(|i| engine.words.lines().iter().find(|l| l.index == i));
+        let next = stats
+            .lyric_line
+            .and_then(|i| engine.words.lines().iter().find(|l| l.index == i + 1));
+        let ranges: Vec<(usize, usize)> = synced
+            .map(|l| {
+                l.words
+                    .iter()
+                    .map(|w| (w.byte_start, w.byte_end))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let [main, _dim, accent] = stats.scene.palette();
+        let (mr, mg, mb) = col::rgb_of(main);
+        let (ar, ag, ab) = col::rgb_of(accent);
+        let data = crate::export::tui::ChromeData {
+            main: [mr, mg, mb],
+            accent: [ar, ag, ab],
+            title: "春・夏・秋・冬 · Junia Brutus × 重音テト",
+            chapter: stats.chapter,
+            chapter_progress: stats.chapter_progress,
+            t,
+            progress: stats.progress,
+            line: synced.map(|l| l.text.as_str()),
+            words: &ranges,
+            singing: stats.lyric_word,
+            next: next.map(|l| l.text.as_str()),
+        };
+        exporter.write_with(i, &buf, area, |r, img| {
+            crate::export::tui::dot_field(img, 16, 0.10);
+            crate::export::tui::draw_chrome(r, img, &data);
+            crate::export::tui::bloom(img, 0.30);
+            crate::export::tui::scanlines(img);
+            crate::export::tui::vignette(img, true);
+        })?;
 
         // 进度写 stderr —— 导出模式不占用终端
         if i % 30 == 0 || i + 1 == total_frames {
