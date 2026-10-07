@@ -439,7 +439,7 @@ pub fn draw_chrome(r: &Rasterizer, img: &mut RgbaImage, d: &ChromeData) {
                 let c = if i == d.singing {
                     // 正在唱：强调色打底 + 黑字（卡拉OK 走字块）
                     let pw = r.measure_text(piece, px);
-                    fill_rect(img, x - 2, base - px, pw + 4, (px * 1.25) as i32, d.accent);
+                    fill_rect(img, x - 2, base - px as i32, pw + 4, (px * 1.25) as i32, d.accent);
                     [10, 10, 12]
                 } else if i < d.singing {
                     mix(UI, 1.0)
