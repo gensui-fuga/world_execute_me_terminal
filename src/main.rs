@@ -40,6 +40,7 @@ use crossterm::terminal::{
 use rand::rngs::SmallRng;
 use rand::SeedableRng;
 use ratatui::backend::CrosstermBackend;
+use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};

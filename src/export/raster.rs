@@ -435,7 +435,9 @@ mod tests {
         // 即使字体缺失，Braille 也必须能画
         let r = Rasterizer {
             font: None,
+            fallback: None,
             font_path: None,
+            fallback_path: None,
             cell_w: 8,
             cell_h: 16,
             font_size: 13.0,

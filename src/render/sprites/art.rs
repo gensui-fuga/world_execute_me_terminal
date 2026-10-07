@@ -27,7 +27,7 @@ pub static SPRING: &[Sprite] = &[
             "       ...       ",
         ],
     },
-    /// 花蕾：尖顶花苞 + 花萼 + 花茎，闭合感来自上尖下圆。
+    // 花蕾：尖顶花苞 + 花萼 + 花茎，闭合感来自上尖下圆。
     Sprite {
         name: "bud",
         art: &[
@@ -47,7 +47,7 @@ pub static SPRING: &[Sprite] = &[
             "       .#.       ",
         ],
     },
-    /// 露珠：上尖下圆的水滴，`+` 是左上角的高光反射。
+    // 露珠：上尖下圆的水滴，`+` 是左上角的高光反射。
     Sprite {
         name: "dewdrop",
         art: &[
@@ -65,7 +65,7 @@ pub static SPRING: &[Sprite] = &[
             "       ...       ",
         ],
     },
-    /// 嫩芽：两片子叶从土里钻出来。
+    // 嫩芽：两片子叶从土里钻出来。
     Sprite {
         name: "sprout",
         art: &[
@@ -83,7 +83,7 @@ pub static SPRING: &[Sprite] = &[
             "      .#####.    ",
         ],
     },
-    /// 花瓣：单片，两头尖，中间一条浅色中脉。
+    // 花瓣：单片，两头尖，中间一条浅色中脉。
     Sprite {
         name: "petal",
         art: &[
@@ -100,7 +100,7 @@ pub static SPRING: &[Sprite] = &[
             "       .         ",
         ],
     },
-    /// 燕子：流线身 + 展开的尖翅 + 下方分叉的剪刀尾。
+    // 燕子：流线身 + 展开的尖翅 + 下方分叉的剪刀尾。
     Sprite {
         name: "swallow",
         art: &[
@@ -122,7 +122,7 @@ pub static SPRING: &[Sprite] = &[
 
 /// 夏：莲叶、蜻蜓、竹帘、酒盃、雨滴、太阳。
 pub static SUMMER: &[Sprite] = &[
-    /// 莲叶：圆盘 + 放射叶脉 + 底部叶柄。
+    // 莲叶：圆盘 + 放射叶脉 + 底部叶柄。
     Sprite {
         name: "lotus",
         art: &[
@@ -141,7 +141,7 @@ pub static SUMMER: &[Sprite] = &[
             "       .*.       ",
         ],
     },
-    /// 蜻蜓：细长腹部 + 两对横向薄翅。
+    // 蜻蜓：细长腹部 + 两对横向薄翅。
     Sprite {
         name: "dragonfly",
         art: &[
@@ -160,7 +160,7 @@ pub static SUMMER: &[Sprite] = &[
             "        .        ",
         ],
     },
-    /// 竹帘：一排竖条 + 上下两根横轴。
+    // 竹帘：一排竖条 + 上下两根横轴。
     Sprite {
         name: "bamboo_blind",
         art: &[
@@ -178,7 +178,7 @@ pub static SUMMER: &[Sprite] = &[
             "#################",
         ],
     },
-    /// 酒盃：上宽下窄的梯形杯身，`+` 是釉面反光。
+    // 酒盃：上宽下窄的梯形杯身，`+` 是釉面反光。
     Sprite {
         name: "sake_cup",
         art: &[
@@ -195,7 +195,7 @@ pub static SUMMER: &[Sprite] = &[
             "      ...      ",
         ],
     },
-    /// 雨滴：竖直拉长的水滴。
+    // 雨滴：竖直拉长的水滴。
     Sprite {
         name: "rain_drop",
         art: &[
@@ -210,7 +210,7 @@ pub static SUMMER: &[Sprite] = &[
             "      .      ",
         ],
     },
-    /// 太阳：实心圆盘 + 一圈放射光线。
+    // 太阳：实心圆盘 + 一圈放射光线。
     Sprite {
         name: "sun",
         art: &[
@@ -231,7 +231,7 @@ pub static SUMMER: &[Sprite] = &[
 
 /// 秋：松树、月亮、枫叶、银杏叶、菊、蝉。
 pub static AUTUMN: &[Sprite] = &[
-    /// 松树：三层三角树冠 + 树干，这是最好认的针叶树剪影。
+    // 松树：三层三角树冠 + 树干，这是最好认的针叶树剪影。
     Sprite {
         name: "pine",
         art: &[
@@ -252,7 +252,7 @@ pub static AUTUMN: &[Sprite] = &[
             "      ###      ",
         ],
     },
-    /// 月亮：圆盘 + 几处暗环形山 + 外围月晕。
+    // 月亮：圆盘 + 几处暗环形山 + 外围月晕。
     Sprite {
         name: "moon",
         art: &[
@@ -269,7 +269,7 @@ pub static AUTUMN: &[Sprite] = &[
             "     .....     ",
         ],
     },
-    /// 枫叶：五裂 + 叶柄，左右对称。
+    // 枫叶：五裂 + 叶柄，左右对称。
     Sprite {
         name: "maple_leaf",
         art: &[
@@ -287,7 +287,7 @@ pub static AUTUMN: &[Sprite] = &[
             "      .#.      ",
         ],
     },
-    /// 银杏叶：上方展开的扇形，下方收成细柄，中间有一道缺口。
+    // 银杏叶：上方展开的扇形，下方收成细柄，中间有一道缺口。
     Sprite {
         name: "ginkgo",
         art: &[
@@ -305,7 +305,7 @@ pub static AUTUMN: &[Sprite] = &[
             "      .#.      ",
         ],
     },
-    /// 菊：多层放射花瓣。
+    // 菊：多层放射花瓣。
     Sprite {
         name: "chrysanthemum",
         art: &[
@@ -325,7 +325,7 @@ pub static AUTUMN: &[Sprite] = &[
             "       .       ",
         ],
     },
-    /// 蝉：粗壮身体 + 收拢的薄翅。
+    // 蝉：粗壮身体 + 收拢的薄翅。
     Sprite {
         name: "cicada",
         art: &[
@@ -346,7 +346,7 @@ pub static AUTUMN: &[Sprite] = &[
 
 /// 冬：雪花、枯树、雪人、霜晶、梅花、脚印。
 pub static WINTER: &[Sprite] = &[
-    /// 雪花：三条主轴的六角星，每轴两侧带分叉，完全对称。
+    // 雪花：三条主轴的六角星，每轴两侧带分叉，完全对称。
     Sprite {
         name: "snowflake",
         art: &[
@@ -367,7 +367,7 @@ pub static WINTER: &[Sprite] = &[
             "  .    #    .  ",
         ],
     },
-    /// 枯树：无叶主干 + 向上分叉的枝条。
+    // 枯树：无叶主干 + 向上分叉的枝条。
     Sprite {
         name: "bare_tree",
         art: &[
@@ -387,7 +387,7 @@ pub static WINTER: &[Sprite] = &[
             "     .###.     ",
         ],
     },
-    /// 雪人：大小两个雪球 + 眼睛 + 胡萝卜鼻 + 纽扣。
+    // 雪人：大小两个雪球 + 眼睛 + 胡萝卜鼻 + 纽扣。
     Sprite {
         name: "snowman",
         art: &[
@@ -407,7 +407,7 @@ pub static WINTER: &[Sprite] = &[
             "   .........   ",
         ],
     },
-    /// 霜晶：中轴 + 两侧短刺，羽毛状。
+    // 霜晶：中轴 + 两侧短刺，羽毛状。
     Sprite {
         name: "frost",
         art: &[
@@ -424,7 +424,7 @@ pub static WINTER: &[Sprite] = &[
             "      .#.      ",
         ],
     },
-    /// 梅花：五瓣 + 花蕊 + 一小段枝。
+    // 梅花：五瓣 + 花蕊 + 一小段枝。
     Sprite {
         name: "plum_blossom",
         art: &[
@@ -443,7 +443,7 @@ pub static WINTER: &[Sprite] = &[
             "      .#.      ",
         ],
     },
-    /// 脚印：五个趾印 + 脚掌。
+    // 脚印：五个趾印 + 脚掌。
     Sprite {
         name: "footprint",
         art: &[
@@ -463,7 +463,7 @@ pub static WINTER: &[Sprite] = &[
 
 /// 通用：卷轴、远山、小舟、飞鸟。
 pub static COMMON: &[Sprite] = &[
-    /// 卷轴：上下两根卷筒 + 中间纸面。
+    // 卷轴：上下两根卷筒 + 中间纸面。
     Sprite {
         name: "scroll",
         art: &[
@@ -479,7 +479,7 @@ pub static COMMON: &[Sprite] = &[
             "####.........####",
         ],
     },
-    /// 远山：双峰山脊剪影。
+    // 远山：双峰山脊剪影。
     Sprite {
         name: "mountain",
         art: &[
@@ -495,7 +495,7 @@ pub static COMMON: &[Sprite] = &[
             "   .............  ",
         ],
     },
-    /// 小舟：三角帆 + 船身。
+    // 小舟：三角帆 + 船身。
     Sprite {
         name: "boat",
         art: &[
@@ -512,7 +512,7 @@ pub static COMMON: &[Sprite] = &[
             "   ..........  ",
         ],
     },
-    /// 飞鸟：展开的双翼 + 身体。
+    // 飞鸟：展开的双翼 + 身体。
     Sprite {
         name: "bird",
         art: &[

@@ -278,8 +278,8 @@ mod tests {
             let (x0, y0, x1, y1) = draw(
                 &mut c,
                 sp,
-                c.sw / 2.0,
-                c.sh / 2.0,
+                c.sw as f32 / 2.0,
+                c.sh as f32 / 2.0,
                 1.0,
                 crate::render::color::WHITE,
                 1.0,
