@@ -919,8 +919,8 @@ fn draw_chrome_bottom(c: &mut CharCanvas, engine: &Engine, stats: &FrameStats) {
     // ── 当前唱句 ──────────────────────────────────────────────
     if let Some(idx) = stats.lyric_line {
         if let Some(synced) = engine.words.lines().iter().find(|l| l.index == idx) {
-            let px = sh * 0.44;
-            let base = sh * 0.52;
+            let px = sh * 0.40;
+            let base = sh * 0.48;
             let total = crate::render::text::measure(&synced.text, px);
             let mut x = ((sw - total) * 0.5).max(2.0);
             for (wi, wd) in synced.words.iter().enumerate() {
@@ -933,7 +933,7 @@ fn draw_chrome_bottom(c: &mut CharCanvas, engine: &Engine, stats: &FrameStats) {
                 if singing {
                     // 正在唱：先铺一块强调色，字画成黑色 —— 卡拉OK 的走字块
                     let w = crate::render::text::measure(slice, px);
-                    c.fill_rect(x - 1.5, base - px, w + 3.0, px * 1.35, accent, 1.0);
+                    c.fill_rect(x - 1.5, base - px * 0.92, w + 3.0, px * 1.15, accent, 1.0);
                     x = crate::render::text::draw(c, x, base, slice, px, col::BLACK, 1.0);
                 } else {
                     let ink = if sung {
@@ -960,7 +960,7 @@ fn draw_chrome_bottom(c: &mut CharCanvas, engine: &Engine, stats: &FrameStats) {
         crate::render::text::draw(
             c,
             ((sw - w) * 0.5).max(2.0),
-            sh * 0.75,
+            sh - 4.0,
             nxt,
             px,
             col::lerp(col::BLACK, dim, 0.85),
@@ -974,7 +974,7 @@ fn draw_chrome_bottom(c: &mut CharCanvas, engine: &Engine, stats: &FrameStats) {
     c.fill_rect(0.0, by, sw, 3.0, col::lerp(col::BLACK, main, 0.40), 1.0);
     c.fill_rect(0.0, by, sw * p, 3.0, accent, 1.0);
     // 进度游标：一条比进度条高的亮线，让「现在到哪了」一眼可见
-    c.fill_rect((sw * p - 0.5).max(0.0), by - 1.5, 1.5, 6.0, col::WHITE, 1.0);
+    c.fill_rect((sw * p - 0.5).max(0.0), by - 1.0, 1.5, 4.0, col::WHITE, 1.0);
 }
 
 /// 底部状态栏。
