@@ -1047,9 +1047,21 @@ pub fn render(
     particles: &mut ParticleSystem,
     rng: &mut SmallRng,
 ) {
-    // 公共底层：星野（灰白点阵），任何段落都不会死黑。
+    let [main, _dim, accent] = ctx.scene.palette();
+
+    // ── 1. 全屏流动大气场 ────────────────────────────────────────
+    // 由 `Engine::render_frame` 画在 LAYER_BG 上（背景层，先于主体合成）。
+    // 放在这一层而不是主体层，是因为主体层带 alpha，底纹会被一起压暗。
+    // 没有这一层的话画面 92% 的字符格是纯黑的 —— 实测成片平均亮度只有 1.86/255。
+
+    // ── 2. 季节汉字水印 ──────────────────────────────────────────
+    // 一眼就知道现在播到哪一季，不用靠猜配色。
+    draw_season_watermark(ctx, canvas);
+
+    // ── 3. 星野（灰白点阵） ──────────────────────────────────────
     draw_starfield(ctx, canvas);
 
+    // ── 4. 场景主体 ──────────────────────────────────────────────
     match ctx.scene {
         SceneKind::Intro => {
             crate::render::scenes_intro::render_card(ctx, canvas, 1.0);
@@ -1095,14 +1107,110 @@ pub fn render(
             crate::render::scenes_outro::render_card(ctx, canvas, 1.0);
         }
     }
+
+    // ── 5. 光晕 ──────────────────────────────────────────────────
+    // 给画面已有的亮部套一层同色辉光。这是「好看」和「简笔画」的分界线：
+    // 同样是几根线，套了光就是霓虹灯管，不套就是小学生的圆珠笔。
+    // 必须放在主体之后、真字之前 —— 它只加亮，不改已有覆盖度。
+    crate::render::chrome::glow(canvas, main, 7.0, 0.8);
+
+    // ── 6. 真字关键词 ────────────────────────────────────────────
+    // 把当前唱句里最具体的那个词放大打在画面上。这是「看得懂」的最后一道保险：
+    // 观众就算看不懂抽象图形，也一定能读出这两个字。
+    draw_keyword(ctx, canvas, accent, main);
 }
 
-/// 各季共用框架：当前唱句字幕 + 进度线（接在卡片绘制之后）。
-fn season_frame_ui(ctx: &SceneCtx, canvas: &mut CharCanvas) {
-    let [main, _dim, accent] = ctx.scene.palette();
-    if let Some(line) = ctx.lyric() {
-        draw_faux_text(canvas, 8.0, canvas.sh as f32 - 14.0, line, main, 0.9);
+/// 季节汉字水印：画在画面右侧，用暗色但**满覆盖度**。
+///
+/// 注意：想让文字变淡只能压颜色，**不能压 alpha** ——
+/// Braille 只在覆盖度 `w > 0.5` 时点亮，而文字覆盖度是 `(cov*1.7).min(1) * alpha`，
+/// alpha 低于 0.55 的笔画会整段消失，画面上什么都不剩。
+fn draw_season_watermark(ctx: &SceneCtx, canvas: &mut CharCanvas) {
+    let kanji = ctx.scene.kanji();
+    if kanji.is_empty() || canvas.sw < 40 || canvas.sh < 20 {
+        return;
     }
+    let px = canvas.sh as f32 * 0.40;
+    let w = crate::render::text::measure(kanji, px);
+    if w <= 0.0 || w > canvas.sw as f32 {
+        return;
+    }
+    let x = canvas.sw as f32 - w - canvas.sw as f32 * 0.05;
+    // 基线落在画面 55% 高度处
+    let y = canvas.sh as f32 * 0.55;
+    let c = col::lerp(col::BLACK, ctx.scene.palette()[1], 0.32);
+    crate::render::text::draw(canvas, x, y, kanji, px, c, 1.0);
+}
+
+/// 当前唱句里「最具体的词」，放大打在画面上部。
+fn draw_keyword(ctx: &SceneCtx, canvas: &mut CharCanvas, accent: Color, main: Color) {
+    let Some(line) = ctx.lyric() else {
+        return;
+    };
+    let Some(kw) = keyword_of(line) else {
+        return;
+    };
+    if canvas.sw < 60 || canvas.sh < 30 {
+        return;
+    }
+    let px = canvas.sh as f32 * 0.26;
+    let w = crate::render::text::measure(&kw, px);
+    if w <= 0.0 || w > canvas.sw as f32 * 0.9 {
+        return;
+    }
+    let x = (canvas.sw as f32 - w) * 0.5;
+    let y = canvas.sh as f32 * 0.34;
+
+    // 描边：先在四周各偏 1 点打一圈暗色，让字从任何背景上都读得出来。
+    let halo = col::lerp(col::BLACK, main, 0.42);
+    for (dx, dy) in [(-1.0f32, 0.0f32), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0)] {
+        crate::render::text::draw(canvas, x + dx, y + dy, &kw, px, halo, 1.0);
+    }
+    crate::render::text::draw(canvas, x, y, &kw, px, accent, 1.0);
+}
+
+/// 从一句歌词里挑一个「最具体」的词做画面大字。
+///
+/// 取最长的连续汉字串（上限 2 字）；整句没有汉字（全是假名）时退回最长的片假名串。
+/// 例：「東風吹けば雲は解ケテ」→「東風」、「一羽の蝶」→「一羽」。
+fn keyword_of(line: &str) -> Option<String> {
+    let is_kanji = |c: char| matches!(c as u32, 0x4E00..=0x9FFF | 0x3400..=0x4DBF);
+    let is_kata = |c: char| matches!(c as u32, 0x30A1..=0x30FA | 0x30FD..=0x30FF);
+
+    let longest = |pred: &dyn Fn(char) -> bool| -> String {
+        let mut best = String::new();
+        let mut cur = String::new();
+        for ch in line.chars() {
+            if pred(ch) {
+                cur.push(ch);
+            } else {
+                if cur.chars().count() > best.chars().count() {
+                    best = std::mem::take(&mut cur);
+                }
+                cur.clear();
+            }
+        }
+        if cur.chars().count() > best.chars().count() {
+            best = cur;
+        }
+        best
+    };
+
+    let k = longest(&is_kanji);
+    let pick = if k.is_empty() { longest(&is_kata) } else { k };
+    if pick.is_empty() {
+        return None;
+    }
+    Some(pick.chars().take(2).collect())
+}
+
+/// 各季共用框架：进度线（接在卡片绘制之后）。
+///
+/// 唱句不在这里画了：底部歌词条由导出外壳统一绘制（真字形 + 逐词高亮），
+/// 画面内的歌词改用 `draw_keyword` 的大字关键词。原来这里打的是「假字」，
+/// 既读不出来又和歌词条重复。
+fn season_frame_ui(ctx: &SceneCtx, canvas: &mut CharCanvas) {
+    let [_main, _dim, accent] = ctx.scene.palette();
     let w = canvas.sw as f32;
     canvas.line(
         0.0,
@@ -1135,10 +1243,8 @@ fn placeholder_scene(ctx: &SceneCtx, canvas: &mut CharCanvas, label_kanji: bool)
         canvas.line(cx, cy - r * 0.5, cx, cy + r * 0.5, accent, 0.4);
     }
 
-    // 当前唱句（底部一行）
-    if let Some(line) = ctx.lyric() {
-        draw_faux_text(canvas, 8.0, canvas.sh as f32 - 14.0, line, main, 0.9);
-    }
+    // 唱句不在这里画：底部歌词条由导出外壳统一绘制（真字形 + 逐词高亮），
+    // 画面内改用 `draw_keyword` 的大字关键词。
 
     // 进度细线
     let w = canvas.sw as f32;

@@ -54,7 +54,7 @@ use crate::input::Action;
 use crate::lyrics::words::WordTimeline;
 use crate::lyrics::Lyrics;
 use crate::render::color as col;
-use crate::render::layers::{LayerStack, LAYER_LYRICS, LAYER_PARTICLES, LAYER_SUBJECT};
+use crate::render::layers::{LayerStack, LAYER_BG, LAYER_LYRICS, LAYER_PARTICLES, LAYER_SUBJECT};
 use crate::render::particles::ParticleSystem;
 use crate::render::postfx::PostFxStack;
 use crate::render::scenes::{self, SceneCtx};
@@ -266,8 +266,19 @@ impl Engine {
             invert: cues.active(t, CueKind::Invert),
         };
 
-        // 1) 场景 → 主体层
+        // 清空所有图层（大气场必须画在 clear_all 之后，否则刚铺的底纹会被清掉）
         self.layers.clear_all();
+
+        // 0) 全屏流动大气场 → 背景层
+        //    必须画在主体之前、且单独占一层：主体层带 alpha，
+        //    底纹若跟着主体一起被压暗就白铺了。
+        //    这一层是「画面不再大片死黑」的硬保证 —— 它保证每个字符格至少有一个亮点。
+        {
+            let bg = self.layers.canvas_mut(LAYER_BG);
+            crate::render::atmosphere::render(bg, &ctx, 0.95);
+        }
+
+        // 1) 场景 → 主体层
         {
             let subject = self.layers.canvas_mut(LAYER_SUBJECT);
             scenes::render(&ctx, subject, &mut self.particles, &mut self.rng);
@@ -801,6 +812,164 @@ fn draw_lyric_band(f: &mut Frame, engine: &Engine, stats: &FrameStats, area: Rec
     f.render_widget(Paragraph::new(Line::from(spans)), inner);
 }
 
+// ─────────────────────────────── 导出模式的 UI 外壳 ───────────────────────────────
+//
+// 实时播放用 `Frame` + widget 叠界面；离线导出只有一个 `Buffer`，
+// 所以外壳直接写单元。这不是「另做一套」——是同一版式在导出侧的落地：
+// 顶栏一行、底部三行（当前唱句 / 下一句 / 状态条），中间留给画面。
+//
+// 为什么要有外壳：只有画面的话，观众看到的是「一堆抽象图形在动」；
+// 加上标题栏、时间码、歌词、频谱和进度条之后，它读起来是一个**正在运行的终端程序**，
+// 有上下文、有进度、有「现在在唱哪句」。这是这支片子和幻灯片的区别。
+
+/// 导出时上下各留多少行给外壳。
+pub const CHROME_TOP: u16 = 1;
+pub const CHROME_BOTTOM: u16 = 4;
+
+/// 往 buffer 的某一行写一段文字，返回写完后的下一个 x。越界自动截断。
+fn put_str(
+    buf: &mut Buffer,
+    area: Rect,
+    x: u16,
+    y: u16,
+    text: &str,
+    fg: Color,
+    bg: Color,
+    bold: bool,
+) -> u16 {
+    let mut cx = x;
+    for ch in text.chars() {
+        if cx >= area.width || y >= area.height {
+            break;
+        }
+        let cell = &mut buf[(area.x + cx, area.y + y)];
+        cell.set_char(ch);
+        let mut st = Style::default().fg(fg).bg(bg);
+        if bold {
+            st = st.add_modifier(Modifier::BOLD);
+        }
+        cell.set_style(st);
+        cx += 1;
+    }
+    cx
+}
+
+/// 把整行铺成底色（做标题栏/状态条的底）。
+fn fill_row(buf: &mut Buffer, area: Rect, y: u16, fg: Color, bg: Color) {
+    if y >= area.height {
+        return;
+    }
+    for x in 0..area.width {
+        let cell = &mut buf[(area.x + x, area.y + y)];
+        cell.set_char(' ');
+        cell.set_style(Style::default().fg(fg).bg(bg));
+    }
+}
+
+/// 导出模式的 UI 外壳。在画面画完之后叠加，覆盖顶栏与底部三行。
+fn draw_chrome_buf(buf: &mut Buffer, area: Rect, engine: &Engine, stats: &FrameStats, t: f64) {
+    if area.width < 48 || area.height < CHROME_TOP + CHROME_BOTTOM + 4 {
+        return;
+    }
+    let [main, dim, accent] = stats.scene.palette();
+    let bar_bg = col::lerp(col::BLACK, main, 0.22);
+    let bar_fg = col::lerp(col::BLACK, main, 0.85);
+    let faint = col::lerp(col::BLACK, dim, 0.55);
+    let hot = col::lerp(main, col::WHITE, 0.45);
+
+    // ── 顶栏：曲名 · 作者 · 当前章节 · 时间码 ──────────────────
+    fill_row(buf, area, 0, bar_fg, bar_bg);
+    let title = format!(
+        " 春・夏・秋・冬  ·  Junia Brutus × 重音テト  ·  {}  ",
+        stats.scene.label()
+    );
+    let used = put_str(buf, area, 0, 0, &title, hot, bar_bg, true);
+    let tc = format!("{:02}:{:04.1} / 04:49.9 ", (t / 60.0) as u32, t % 60.0);
+    let tc_w = tc.chars().count() as u16;
+    if used + tc_w + 2 < area.width {
+        put_str(buf, area, area.width - tc_w - 1, 0, &tc, bar_fg, bar_bg, false);
+    }
+
+    let base = area.height - CHROME_BOTTOM;
+
+    // ── 当前唱句：逐词高亮（已唱的亮、正在唱的用强调色块、未唱的暗） ──
+    let lyric_bg = col::lerp(col::BLACK, main, 0.12);
+    fill_row(buf, area, base, bar_fg, lyric_bg);
+    let mut x = put_str(buf, area, 1, base, "> ", hot, lyric_bg, true);
+    if let Some(idx) = stats.lyric_line {
+        if let Some(synced) = engine.words.lines().iter().find(|l| l.index == idx) {
+            for (wi, wd) in synced.words.iter().enumerate() {
+                let slice = &synced.text[wd.byte_start..wd.byte_end];
+                let singing = wi == stats.lyric_word;
+                let sung = wi < stats.lyric_word;
+                let (fg, bg) = if singing {
+                    (col::BLACK, accent)
+                } else if sung {
+                    (col::WHITE, col::lerp(col::BLACK, main, 0.34))
+                } else {
+                    (col::lerp(col::BLACK, col::GREY_WHITE, 0.5), col::lerp(col::BLACK, main, 0.10))
+                };
+                x = put_str(buf, area, x, base, slice, fg, bg, singing);
+                x = put_str(buf, area, x, base, " ", fg, bg, false);
+                if x + 4 >= area.width {
+                    break;
+                }
+            }
+            // 正在唱：实心光标；间奏：呼吸光标
+            let blink = ((t * 3.0) as i64) % 2 == 0;
+            if stats.lyric_word < synced.words.len() || blink {
+                let c = if stats.lyric_word < synced.words.len() { accent } else { faint };
+                put_str(buf, area, x, base, " ", col::BLACK, c, false);
+            }
+        }
+    } else {
+        put_str(buf, area, x, base, "…", col::DARK_GREY, lyric_bg, false);
+    }
+
+    // ── 下一句预告 ────────────────────────────────────────────
+    let nxt_bg = col::lerp(col::BLACK, main, 0.06);
+    fill_row(buf, area, base + 1, faint, nxt_bg);
+    let nxt = stats
+        .lyric_line
+        .and_then(|i| engine.words.lines().iter().find(|l| l.index == i + 1))
+        .map(|l| l.text.as_str())
+        .unwrap_or("— — —");
+    put_str(buf, area, 1, base + 1, "  ", faint, nxt_bg, false);
+    put_str(buf, area, 3, base + 1, nxt, faint, nxt_bg, false);
+
+    // ── 状态条：章节 · 六频段 · 进度 ──────────────────────────
+    let st_bg = col::lerp(col::BLACK, main, 0.16);
+    fill_row(buf, area, base + 2, bar_fg, st_bg);
+    let head = format!(" ▶ {}  ", stats.chapter);
+    let mut sx = put_str(buf, area, 0, base + 2, &head, hot, st_bg, true);
+
+    // 六频段柱状图：把 bands 映射成 ▁▂▃▄▅▆▇█
+    const LEVELS: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    let mut spec = String::new();
+    for (i, b) in stats.bands.iter().enumerate() {
+        let v = (b.clamp(0.0, 1.0) * 7.0).round() as usize;
+        spec.push(LEVELS[v.min(7)]);
+        if i % 2 == 1 {
+            spec.push(' ');
+        }
+    }
+    sx = put_str(buf, area, sx, base + 2, "  ♪ ", bar_fg, st_bg, false);
+    sx = put_str(buf, area, sx, base + 2, &spec, col::lerp(main, col::WHITE, 0.3), st_bg, false);
+
+    // 右侧进度条
+    let pw: u16 = 28;
+    if area.width > sx + pw + 10 {
+        let px = area.width - pw - 8;
+        let filled = ((stats.progress.clamp(0.0, 1.0)) * pw as f32).round() as u16;
+        let bar: String = (0..pw)
+            .map(|i| if i < filled { '━' } else { '─' })
+            .collect();
+        put_str(buf, area, px, base + 2, &bar, accent, st_bg, false);
+        let pct = format!(" {:>3}% ", (stats.progress.clamp(0.0, 1.0) * 100.0) as u32);
+        put_str(buf, area, px + pw, base + 2, &pct, bar_fg, st_bg, false);
+    }
+}
+
 /// 底部状态栏。
 fn draw_status(
     f: &mut Frame,
@@ -948,6 +1117,10 @@ fn export_all(
         }
     };
 
+    // 画面只占中间：上下留给 UI 外壳（顶栏 + 歌词条 + 状态条）。
+    // 外壳不是装饰 —— 有它才读得出「这是一个在跑的终端程序」，而不是一堆抽象图形。
+    let stage_rows = rows.saturating_sub(CHROME_TOP + CHROME_BOTTOM).max(8);
+
     let mut exporter = FrameExporter::new(&frame_dir, cell_w, cell_h)?;
     tracing::info!(
         dir = %frame_dir.display(),
@@ -955,14 +1128,17 @@ fn export_all(
         rows,
         cell = format!("{cell_w}x{cell_h}"),
         font = exporter.font_path().unwrap_or("<none: braille only>"),
+        cjk = exporter.fallback_path().unwrap_or("<none: 汉字会变方块!>"),
+        stage_rows,
         "开始导出帧"
     );
 
-    let mut engine = Engine::new(track, timeline, lyrics, cols, rows, cfg.mode, cfg.seed);
+    let mut engine = Engine::new(track, timeline, lyrics, cols, stage_rows, cfg.mode, cfg.seed);
 
     let total_frames = (duration * fps).ceil() as u64;
     let dt = 1.0 / fps;
     let area = Rect::new(0, 0, cols, rows);
+    let stage = Rect::new(0, CHROME_TOP, cols, stage_rows);
     let mut buf = ratatui::buffer::Buffer::empty(area);
 
     // 起始时间：--offset 指定从歌曲的哪一秒开始导。
@@ -977,8 +1153,9 @@ fn export_all(
         for cell in buf.content.iter_mut() {
             cell.reset();
         }
-        engine.render_frame(t, dt);
-        engine.canvas.to_buffer(&mut buf, area);
+        let stats = engine.render_frame(t, dt);
+        engine.canvas.to_buffer(&mut buf, stage);
+        draw_chrome_buf(&mut buf, area, &engine, &stats, t);
         exporter.write(i, &buf, area)?;
 
         // 进度写 stderr —— 导出模式不占用终端

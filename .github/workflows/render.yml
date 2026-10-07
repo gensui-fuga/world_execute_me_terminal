@@ -48,7 +48,9 @@ jobs:
       - name: 安装系统依赖
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev pkg-config ffmpeg
+          # fonts-noto-cjk 是硬需求：歌词、标题、章节名全是日文与汉字，
+          # runner 默认只有 DejaVu（无汉字），不装的话所有文字都是豆腐块。
+          sudo apt-get install -y libasound2-dev pkg-config ffmpeg fonts-noto-cjk fonts-droid-fallback
 
       - name: 构建 release
         run: cargo build --release

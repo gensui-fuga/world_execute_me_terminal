@@ -58,11 +58,54 @@ pub fn load_font() -> Option<(Font, String)> {
     None
 }
 
+/// 中日韩回退字体路径。
+///
+/// 主字体表里的 DejaVu / JetBrains / Liberation **都没有汉字**，
+/// 而本片的歌词、标题、章节名全是日文与汉字。没有回退字体的话，
+/// 所有文字都会渲染成豆腐块 —— 这是必须堵死的坑。
+pub const CJK_FALLBACK: &[&str] = &[
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+    "/usr/share/fonts/truetype/droid/DroidSansFallback.ttf",
+    "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
+    "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
+    "C:/Windows/Fonts/meiryo.ttc",
+    "C:/Windows/Fonts/msgothic.ttc",
+];
+
+/// 加载一个中日韩字体。返回 `None` 表示系统上没有可用汉字字体。
+pub fn load_cjk_font() -> Option<(Font, String)> {
+    let mut candidates: Vec<String> = Vec::new();
+    if let Ok(p) = std::env::var("WEM_CJK_FONT") {
+        if !p.is_empty() {
+            candidates.push(p);
+        }
+    }
+    candidates.extend(CJK_FALLBACK.iter().map(|s| s.to_string()));
+
+    for p in candidates {
+        let Ok(data) = std::fs::read(&p) else {
+            continue;
+        };
+        if let Ok(font) = Font::from_bytes(data, FontSettings::default()) {
+            return Some((font, p));
+        }
+    }
+    None
+}
+
 /// 字符光栅化器。
 pub struct Rasterizer {
     font: Option<Font>,
+    /// 缺字回退字体（中日韩）。
+    fallback: Option<Font>,
     /// 字体文件路径（日志用）
     font_path: Option<String>,
+    /// 回退字体路径（日志用）
+    fallback_path: Option<String>,
     /// 单元宽（像素）
     pub cell_w: u32,
     /// 单元高（像素）
@@ -86,9 +129,27 @@ impl Rasterizer {
         };
         let cell_w = cell_w.max(2);
         let cell_h = cell_h.max(2);
+
+        // 回退字体：只在主字体缺这个字形时才用（见 `draw_char`）。
+        let (fallback, fallback_path) = match load_cjk_font() {
+            Some((f, p)) => {
+                tracing::info!(font = %p, "中日韩回退字体已加载");
+                (Some(f), Some(p))
+            }
+            None => {
+                tracing::warn!(
+                    "未找到中日韩字体，汉字将渲染为方块；\
+                     请安装 fonts-noto-cjk 或设置 WEM_CJK_FONT"
+                );
+                (None, None)
+            }
+        };
+
         Self {
             font,
+            fallback,
             font_path,
+            fallback_path,
             cell_w,
             cell_h,
             // 字号取单元高度的 85%，给上下留一点呼吸空间
@@ -99,6 +160,11 @@ impl Rasterizer {
     /// 实际使用的字体路径。
     pub fn font_path(&self) -> Option<&str> {
         self.font_path.as_deref()
+    }
+
+    /// 中日韩回退字体路径。
+    pub fn fallback_path(&self) -> Option<&str> {
+        self.fallback_path.as_deref()
     }
 
     /// 是否有可用字体。
@@ -196,7 +262,13 @@ impl Rasterizer {
             _ => {}
         }
 
-        match &self.font {
+        // 字形回退：主字体没有这个字形时换用中日韩字体。
+        // `lookup_glyph_index` 返回 0 即缺字 —— DejaVu 遇到汉字就是这种情况。
+        let chosen = match &self.font {
+            Some(f) if f.lookup_glyph_index(ch) != 0 => self.font.as_ref(),
+            _ => self.fallback.as_ref().or(self.font.as_ref()),
+        };
+        match chosen {
             Some(font) => {
                 let (metrics, bitmap) = font.rasterize(ch, self.font_size);
                 if metrics.width == 0 || metrics.height == 0 {

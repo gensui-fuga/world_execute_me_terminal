@@ -25,6 +25,16 @@ pub mod particles;
 pub mod postfx;
 pub mod scenes;
 pub mod motifs;
+// 美术层（2026-10 返工新增）：真字、光晕/窗口框、全屏大气场、具象精灵。
+// 这四样是针对「画面看不懂、像简笔画」的正面补强：
+//   text      把中日文光栅化进点阵画布，替掉原来按码位随机点亮的「假字」
+//   chrome    元素套彩色光晕（好看的主要来源）+ 终端窗口框 + 解码转场
+//   atmosphere 铺满整幅的流动底纹，消灭大片死黑
+//   sprites   手绘的具象形状（蝴蝶像蝴蝶、雪花六角对称）
+pub mod atmosphere;
+pub mod chrome;
+pub mod sprites;
+pub mod text;
 pub mod scenes_intro;
 pub mod scenes_spring;
 pub mod scenes_summer;

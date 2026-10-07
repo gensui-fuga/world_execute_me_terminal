@@ -47,6 +47,11 @@ impl FrameExporter {
         self.raster.font_path()
     }
 
+    /// 中日韩回退字体路径（可能为 `None`）。
+    pub fn fallback_path(&self) -> Option<&str> {
+        self.raster.fallback_path()
+    }
+
     /// 单元像素尺寸。
     pub fn cell_size(&self) -> (u32, u32) {
         (self.raster.cell_w, self.raster.cell_h)
