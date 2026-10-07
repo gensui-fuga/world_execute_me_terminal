@@ -1,0 +1,36 @@
+# shunkashuto 配置文件示例（《春・夏・秋・冬》）
+#
+# 用法：
+#   shunkashuto --audio song.flac --config assets/config.toml
+#
+# 优先级：命令行 > 本文件 > 内置默认值。
+# 这里写的是「个人偏好」，不是必须项 —— 全部删掉程序照样跑。
+
+# 渲染模式：braille / half / quadrant / ascii / auto
+# auto 会看 $TERM，dumb 或空时退化为 ascii —— 在 CI / 管道里请显式写 braille。
+mode = "braille"
+
+# 目标帧率。60 在 160x50 的终端上对现代机器无压力；
+# 老旧机器（如 X230 的集显 + 大终端）可以降到 30。
+fps = 60.0
+
+# 固定画布尺寸（字符列 x 行）。
+# 不填则实时模式跟随终端窗口，导出模式默认 160x50。
+# 220x62 是这支 MV 的推荐导出尺寸（1760x992，接近 16:9）。
+# width = 220
+# height = 62
+
+# 音画偏移（秒）。正数表示画面提前。
+# 如果你听到鼓点时画面已经闪过了，就往负数调，比如 -0.03。
+offset = 0.0
+
+# 音频输出延迟补偿（毫秒）。
+# 蓝牙耳机通常需要 150~250，有线 0~30。
+latency_comp = 0.0
+
+# 随机种子。同一个种子 + 同一个时间点 = 完全相同的画面。
+seed = 1593070711
+
+# 分轨目录（可选）。放 vocals.wav / drums.wav / bass.wav / other.wav，
+# 程序会用真实分轨驱动人声、鼓、贝斯对应的视觉元素。
+# stems_dir = "~/Music/shunkashuto_stems"

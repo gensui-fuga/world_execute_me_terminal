@@ -1,0 +1,116 @@
+# 春・夏・秋・冬 —— 场景时间轴
+# 全长 289.9s，BPM≈92。每段内部按唱句切「卡」，卡表在 scenes_*.rs。
+
+[[segment]]
+scene = "intro"
+start = 0.0
+label = "序：晨雾未醒"
+
+[[segment]]
+scene = "spring"
+start = 15.7
+label = "春：苔露蝶蕾"
+
+[[segment]]
+scene = "summer"
+start = 43.3
+label = "夏：白雨莲叶"
+
+[[segment]]
+scene = "bridge"
+start = 68.4
+label = "桥：瞬き・幻"
+
+[[segment]]
+scene = "chorus"
+start = 84.9
+label = "副歌：空の気配と人の世"
+
+[[segment]]
+scene = "autumn"
+start = 118.6
+label = "秋：松影月盃"
+
+[[segment]]
+scene = "winter"
+start = 157.9
+label = "冬：枯野银花"
+
+[[segment]]
+scene = "ascension"
+start = 175.55
+label = "昇華：绘卷独楽"
+
+[[segment]]
+scene = "finale"
+start = 224.9
+label = "終章：记忆不锈"
+
+[[segment]]
+scene = "outro"
+start = 268.7
+label = "尾声：收卷"
+
+# ── 关键事件 ──────────────────────────────
+
+# 季节切换的闪白
+[[cue]]
+time = 15.7
+kind = "flash"
+intensity = 0.6
+
+[[cue]]
+time = 47.838
+kind = "flash"
+intensity = 0.7
+
+[[cue]]
+time = 68.438
+kind = "flash"
+intensity = 0.5
+
+[[cue]]
+time = 84.88
+kind = "flash"
+intensity = 0.9
+
+[[cue]]
+time = 118.636
+kind = "flash"
+intensity = 0.6
+
+[[cue]]
+time = 157.93
+kind = "flash"
+intensity = 0.7
+
+[[cue]]
+time = 175.55
+kind = "flash"
+intensity = 0.8
+
+[[cue]]
+time = 224.878
+kind = "flash"
+intensity = 0.6
+
+# 全曲最高点：決シテ錆ビツキハシナイ！
+[[cue]]
+time = 232.448
+kind = "flash"
+intensity = 1.0
+
+[[cue]]
+time = 232.448
+kind = "burst"
+intensity = 1.0
+
+[[cue]]
+time = 232.448
+kind = "glitch"
+intensity = 0.5
+
+[[cue]]
+time = 268.7
+kind = "flash"
+intensity = 0.4

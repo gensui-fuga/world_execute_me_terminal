@@ -1,0 +1,24 @@
+# Rust 构建产物
+/target
+
+# 运行时日志（含本机路径等环境信息，不入库）
+wem.log
+shunkashuto.log
+*.log
+
+# 导出产物
+/out
+/frames
+*.mp4
+*.gif
+
+# 编辑器与系统垃圾
+*.swp
+*~
+.DS_Store
+
+# 音频：版权内容，使用者自备
+*.flac
+*.mp3
+*.wav
+*.m4a

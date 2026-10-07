@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # 检查关卡：clippy + 测试 + release 构建
+  check:
+    name: 检查与测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: 缓存依赖
+        uses: Swatinem/rust-cache@v2
+
+      # Linux 需要 ALSA 开发库（rodio 的音频后端）
+      - name: 安装系统依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev pkg-config
+
+      - name: Clippy
+        run: cargo clippy --all-targets
+
+      - name: 单元测试
+        run: cargo test --all-targets
+
+      - name: Release 构建
+        run: cargo build --release
+
+      - name: 报告二进制大小
+        run: ls -lh target/release/shunkashuto
+
+  # 各平台构建并上传产物
+  build:
+    name: 构建 ${{ matrix.target }}
+    needs: check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+            bin: shunkashuto
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+            bin: shunkashuto.exe
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+            bin: shunkashuto
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: 缓存依赖
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: 安装系统依赖 (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev pkg-config
+
+      - name: 构建
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: 打包 (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../shunkashuto-${{ matrix.target }}.tar.gz ${{ matrix.bin }}
+          cd ../../..
+          ls -lh shunkashuto-${{ matrix.target }}.tar.gz
+
+      - name: 打包 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "target/${{ matrix.target }}/release/${{ matrix.bin }}" -DestinationPath "shunkashuto-${{ matrix.target }}.zip"
+          Get-Item "shunkashuto-${{ matrix.target }}.zip" | Format-List Name, Length
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: shunkashuto-${{ matrix.target }}
+          path: shunkashuto-${{ matrix.target }}.*
+          if-no-files-found: error
+          retention-days: 30

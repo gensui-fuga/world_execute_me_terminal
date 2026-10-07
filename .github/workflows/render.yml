@@ -1,0 +1,105 @@
+name: Render PV
+
+# 在 GitHub 的机器上渲染整支 MV，产物作为 artifact 上传。
+#
+# 为什么是静音占位音轨：
+#   原曲《春・夏・秋・冬》是受版权保护的作品，本仓库不存放、也不会上传任何音频。
+#   渲染需要一个确定长度的输入来驱动时间轴，因此这里用 ffmpeg 现场合成一段
+#   与歌曲等长的静音 WAV。画面结构完全由 assets/timeline.toml + LRC 决定，
+#   所以静音渲染与真音轨渲染的**分镜完全一致**；差别只在音频特征（beat/energy）
+#   驱动的泛光与抖动会弱一些。
+#   本地拿到 artifact 后用 `ffmpeg -c:v copy` 混入真音轨即可，画质无损。
+on:
+  workflow_dispatch:
+    inputs:
+      width:
+        description: "画布宽（字符列）"
+        default: "220"
+      height:
+        description: "画布高（字符行）"
+        default: "62"
+      fps:
+        description: "帧率"
+        default: "24"
+      seconds:
+        description: "时长（秒），默认整曲 289.875"
+        default: "289.875"
+
+env:
+  CARGO_TERM_COLOR: always
+  # 避免 debug 信息撑爆 runner 磁盘
+  CARGO_PROFILE_RELEASE_DEBUG: "false"
+
+jobs:
+  render:
+    name: 渲染整曲
+    runs-on: ubuntu-latest
+    # 289.9s × 24fps ≈ 6958 帧，留足余量
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: 缓存依赖
+        uses: Swatinem/rust-cache@v2
+
+      - name: 安装系统依赖
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev pkg-config ffmpeg
+
+      - name: 构建 release
+        run: cargo build --release
+
+      # 编译完就把 target 删掉：帧序列本身要占 2~3 GB，runner 磁盘只有 14 GB
+      - name: 释放磁盘（拷出二进制后清 target）
+        run: |
+          cp target/release/shunkashuto ./shunkashuto-bin
+          rm -rf target
+          df -h / | tail -1
+
+      - name: 生成等长静音占位音轨
+        run: |
+          ffmpeg -hide_banner -loglevel error -y \
+            -f lavfi -i anullsrc=r=44100:cl=stereo \
+            -t "${{ inputs.seconds }}" -c:a pcm_s16le silence.wav
+          ls -lh silence.wav
+
+      - name: 渲染整曲
+        env:
+          W: ${{ inputs.width }}
+          H: ${{ inputs.height }}
+          FPS: ${{ inputs.fps }}
+        run: |
+          set -eux
+          # --mode braille 必须显式给：CI 里没有 TTY，auto 会退化成 ascii 字符画
+          ./shunkashuto-bin \
+            --audio silence.wav \
+            --lrc assets/shunkashuto.lrc \
+            --timeline assets/timeline.toml \
+            --mode braille \
+            --fps "$FPS" \
+            --width "$W" \
+            --height "$H" \
+            --export-frames frames \
+            --export-video shunkashuto-silent.mp4 \
+            --no-audio
+          ls -lh shunkashuto-silent.mp4
+          df -h / | tail -1
+
+      - name: 上传 MP4
+        uses: actions/upload-artifact@v4
+        with:
+          name: shunkashuto-silent-mp4
+          path: shunkashuto-silent.mp4
+          retention-days: 14
+
+      - name: 上传帧序列（可选，便于抽查单帧）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shunkashuto-frames
+          path: frames
+          retention-days: 3
