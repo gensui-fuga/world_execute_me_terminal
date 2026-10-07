@@ -272,23 +272,25 @@ mod tests {
 
     #[test]
     fn draw_lights_up_pixels() {
-        let mut c = CharCanvas::new(220, 62, crate::render::RenderMode::Braille);
         for sp in all() {
             let mut c = CharCanvas::new(220, 62, crate::render::RenderMode::Braille);
+            // 先取出中心坐标：`&mut c` 与 `c.sw` 不能出现在同一次调用的参数里
+            let (cx, cy) = (c.sw as f32 / 2.0, c.sh as f32 / 2.0);
             let (x0, y0, x1, y1) = draw(
                 &mut c,
                 sp,
-                c.sw as f32 / 2.0,
-                c.sh as f32 / 2.0,
+                cx,
+                cy,
                 1.0,
                 crate::render::color::WHITE,
                 1.0,
             );
             assert!(x1 > x0 && y1 > y0, "{} 矩形退化", sp.name);
             let lit = c.pixels().iter().filter(|p| p.w > 0.5).count();
-            assert!(lit > 30, "{} 只点亮了 {} 个点", sp.name, lit);
+            // scale=1 时一个墨点对应一个点亮像素，所以这里其实是在查墨点数。
+            // 最小的雨滴只有 27 个墨点，阈值留 20。
+            assert!(lit > 20, "{} 只点亮了 {} 个点", sp.name, lit);
         }
-        let _ = &mut c;
     }
 
     #[test]
