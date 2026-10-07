@@ -548,6 +548,7 @@ mod tests {
             cell_w: 8,
             cell_h: 16,
             font_size: 13.0,
+            glyph_ramp: false,
         };
         let mut img = RgbaImage::new(8, 16);
         let mut dots = [[false; 4]; 2];
