@@ -99,6 +99,13 @@ pub struct Cli {
     #[arg(long)]
     pub no_audio: bool,
 
+    /// 文字自检：把这些时间点（秒，逗号分隔）的画面按**字符网格**打到 stdout 后退出。
+    ///
+    /// 终端艺术没法靠肉眼看截图自检 —— 它本身就是字符，
+    /// 直接把字符读出来才是唯一可信的检查方式（也绕开了视觉模型）。
+    #[arg(long, value_name = "T1,T2,...")]
+    pub dump_text: Option<String>,
+
     /// 子命令
     #[command(subcommand)]
     pub command: Option<Command>,

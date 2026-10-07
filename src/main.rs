@@ -474,7 +474,7 @@ fn run(cfg: &Config) -> Result<()> {
         "准备就绪"
     );
 
-    if cfg.export_frames.is_some() || cfg.export_video.is_some() {
+    if cfg.export_frames.is_some() || cfg.export_video.is_some() || cfg.dump_text.is_some() {
         export_all(cfg, track, timeline, lyrics, duration)
     } else {
         realtime(cfg, audio, track, timeline, lyrics)
@@ -1148,6 +1148,42 @@ fn export_all(
     let stage = Rect::new(0, CHROME_TOP, cols, stage_rows);
     let mut buf = ratatui::buffer::Buffer::empty(area);
     let mut chrome = Chrome::new(cols, cfg.mode);
+
+    // ── 文字自检 ──────────────────────────────────────────────────
+    // 终端艺术本身就是字符，所以自检不需要任何图像模型：
+    // 把指定时间点的字符网格原样打到 stdout 就能逐字读。
+    if let Some(spec) = cfg.dump_text.clone() {
+        let times: Vec<f64> = spec
+            .split(',')
+            .filter_map(|s| s.trim().parse::<f64>().ok())
+            .collect();
+        for t in times {
+            for cell in buf.content.iter_mut() {
+                cell.reset();
+            }
+            let stats = engine.render_frame(t, dt);
+            engine.canvas.to_buffer(&mut buf, stage);
+            chrome.draw(&mut buf, area, &engine, &stats, t);
+            let line = stats
+                .lyric_line
+                .and_then(|i| engine.words.lines().iter().find(|l| l.index == i))
+                .map(|l| l.text.as_str())
+                .unwrap_or("(间奏)");
+            println!(
+                "===== t={t:7.2}s  scene={:?}  chapter={}  lyric={:?}  word={} =====",
+                stats.scene, stats.chapter, line, stats.lyric_word
+            );
+            for y in 0..rows {
+                let mut row = String::with_capacity(cols as usize);
+                for x in 0..cols {
+                    row.push_str(buf[(x, y)].symbol());
+                }
+                println!("{}", row.trim_end());
+            }
+            println!();
+        }
+        return Ok(());
+    }
 
     // 起始时间：--offset 指定从歌曲的哪一秒开始导。
     // 实时模式里 offset 是「画面相对音频的微调」，导出模式里它同时决定起点 ——

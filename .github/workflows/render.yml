@@ -69,6 +69,18 @@ jobs:
             -t "${{ inputs.seconds }}" -c:a pcm_s16le silence.wav
           ls -lh silence.wav
 
+      # 文字自检：终端艺术本身就是字符，把画面按字符网格原样打出来就能逐字读，
+      # 完全不需要图像模型（视觉模型经常没额度）。覆盖十个段落各取一点。
+      - name: 文字自检（打印字符网格）
+        run: |
+          set -eux
+          ./shunkashuto-bin \
+            --audio silence.wav \
+            --lrc assets/shunkashuto.lrc \
+            --timeline assets/timeline.toml \
+            --mode braille --fps 24 --width 220 --height 62 --no-audio \
+            --dump-text 8,25,55,76,100,140,170,200,240,262
+
       - name: 渲染整曲
         env:
           W: ${{ inputs.width }}
