@@ -287,10 +287,13 @@ fn advance_of(font: Option<&Font>, ch: char, px: f32) -> f32 {
 /// [`measure`] 的可注入版本。
 fn measure_with(font: Option<&Font>, text: &str, px: f32) -> f32 {
     let px = clamp_px(px);
-    if px <= 0.0 {
+    if px <= 0.0 || text.is_empty() {
         return 0.0;
     }
-    text.chars().map(|ch| advance_of(font, ch, px)).sum()
+    // 末尾 `+ 0.0` 是必要的：`f32::max` 在 `-0.0` 与 `0.0` 之间会返回 `-0.0`，
+    // 而 `(-0.0).to_bits() == 0x8000_0000`，会让「确定性 / 空串为 0」这类按位断言失败。
+    // 加一个正零把符号位归一。
+    text.chars().map(|ch| advance_of(font, ch, px)).sum::<f32>() + 0.0
 }
 
 /// 画一个字符，返回推进宽度。控制字符（`\n` 等）不画、不推进。
